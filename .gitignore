@@ -3,3 +3,5 @@ packer-provisioner-sshproxy
 *.log
 *.out
 __pycache__
+dist
+.pytest_cache

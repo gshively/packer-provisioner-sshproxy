@@ -4,6 +4,15 @@
             "type": "docker",
             "image": "centos",
             "commit": "true"
+        },
+        {
+            "type": "amazon-ebs",
+            "source_ami": "ami-d28c1aad",
+            "ami_name": "s5ugys-test",
+            "instance_type": "t2.micro",
+            "ssh_username": "ec2-user",
+            "subnet_id": "subnet-da4dbee6",
+            "region": "us-east-1"
         }
     ],
     "provisioners": [
@@ -13,9 +22,29 @@
         },
         {
             "type": "sshproxy",
-            "playbook_file": "playbook.yml",
-            "ssh_config_env_name": "SSH_CONFIG_FILE"
+            "command": "ssh -F ${SSH_CONFIG_FILE} ${TARGET_HOSTS} touch /tmp/a_second_file"
+        },
+        {
+            "type":                "sshproxy",
+            "command":             "pytest --ssh-config=${SSH_CONFIG}",
+            "arguments":           [ "--hosts=${TARGET_HOSTS}" ],
+            "host_alias_env_name": "TARGET_HOSTS",
+            "host_alias":          "target",
+            "ssh_config_env_name": "SSH_CONFIG",
+            "environment_variables": [
+                "PYTEST_ADDOPTS=--color=yes -v"
+            ]
         }
+    ],
+    "post-processors": [
+        [
+            {
+                "type": "docker-tag",
+                "repository": "test",
+                "tag": "latest",
+                "only": [ "docker" ]
+            }
+        ]
     ]
 }
 

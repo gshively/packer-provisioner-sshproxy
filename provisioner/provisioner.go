@@ -16,8 +16,6 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
-	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -35,42 +33,31 @@ type Config struct {
 	common.PackerConfig `mapstructure:",squash"`
 	ctx                 interpolate.Context
 
-    // Filename to use for the ssh environment, generated if not passed
+    // Filename/EnvName to use for the ssh environment, generated if not passed
     SshConfigFile       string `mapstructure:"ssh_config_file"`
-
-    // Environment Variable name to set for the SshConfigFile
     SshConfigEnvName    string `mapstructure:"ssh_config_env_name"`
+
+    // HostAlias/EnvName to use for the ssh target host, "default" if not specified
+	HostAlias            string   `mapstructure:"host_alias"`
+    HostAliasEnvName     string   `mapstructure:"host_alias_env_name"`
 
 	// The command to run ansible
 	Command string
-
-	// Extra options to pass to the ansible command
-	ExtraArguments []string `mapstructure:"extra_arguments"`
-
-	AnsibleEnvVars []string `mapstructure:"ansible_env_vars"`
+	Arguments []string `mapstructure:"arguments"`
+    EnvVars        []string `mapstructure:"environment_variables"`
 
 	// The main playbook file to execute.
-	PlaybookFile         string   `mapstructure:"playbook_file"`
-	Groups               []string `mapstructure:"groups"`
-	EmptyGroups          []string `mapstructure:"empty_groups"`
-	HostAlias            string   `mapstructure:"host_alias"`
 	User                 string   `mapstructure:"user"`
 	LocalPort            string   `mapstructure:"local_port"`
 	SSHHostKeyFile       string   `mapstructure:"ssh_host_key_file"`
 	SSHAuthorizedKeyFile string   `mapstructure:"ssh_authorized_key_file"`
 	SFTPCmd              string   `mapstructure:"sftp_command"`
-	SkipVersionCheck     bool     `mapstructure:"skip_version_check"`
-	UseSFTP              bool     `mapstructure:"use_sftp"`
-	InventoryDirectory   string   `mapstructure:"inventory_directory"`
-	InventoryFile        string   `mapstructure:"inventory_file"`
 }
 
 type Provisioner struct {
 	config            Config
 	adapter           *adapter
 	done              chan struct{}
-	ansibleVersion    string
-	ansibleMajVersion uint
 }
 
 func (p *Provisioner) Prepare(raws ...interface{}) error {
@@ -87,23 +74,21 @@ func (p *Provisioner) Prepare(raws ...interface{}) error {
 		return err
 	}
 
-	// Defaults
-	if p.config.Command == "" {
-		p.config.Command = "ansible-playbook"
-	}
-
 	if p.config.HostAlias == "" {
 		p.config.HostAlias = "default"
 	}
 
-    if p.config.SshConfigEnvName == "" {
-        p.config.SshConfigEnvName = "SSH_CONFIG_FILE"
-    }
+	if p.config.HostAliasEnvName == "" {
+		p.config.HostAliasEnvName = "TARGET_HOSTS"
+	}
+
+	if p.config.SshConfigEnvName == "" {
+		p.config.SshConfigEnvName = "SSH_CONFIG_FILE"
+	}
 
 	var errs *packer.MultiError
-	err = validateFileConfig(p.config.PlaybookFile, "playbook_file", true)
-	if err != nil {
-		errs = packer.MultiErrorAppend(errs, err)
+	if p.config.Command == "" {
+		errs = packer.MultiErrorAppend(errs, fmt.Errorf("Command must be specified"))
 	}
 
 	// Check that the authorized key file exists
@@ -120,13 +105,7 @@ func (p *Provisioner) Prepare(raws ...interface{}) error {
 			log.Println(p.config.SSHHostKeyFile, "does not exist")
 			errs = packer.MultiErrorAppend(errs, err)
 		}
-	} else {
-		p.config.AnsibleEnvVars = append(p.config.AnsibleEnvVars, "ANSIBLE_HOST_KEY_CHECKING=False")
-	}
-
-	if !p.config.UseSFTP {
-		p.config.AnsibleEnvVars = append(p.config.AnsibleEnvVars, "ANSIBLE_SCP_IF_SSH=True")
-	}
+    }
 
 	if len(p.config.LocalPort) > 0 {
 		if _, err := strconv.ParseUint(p.config.LocalPort, 10, 16); err != nil {
@@ -134,21 +113,6 @@ func (p *Provisioner) Prepare(raws ...interface{}) error {
 		}
 	} else {
 		p.config.LocalPort = "0"
-	}
-
-	if len(p.config.InventoryDirectory) > 0 {
-		err = validateInventoryDirectoryConfig(p.config.InventoryDirectory)
-		if err != nil {
-			log.Println(p.config.InventoryDirectory, "does not exist")
-			errs = packer.MultiErrorAppend(errs, err)
-		}
-	}
-
-	if !p.config.SkipVersionCheck {
-		err = p.getVersion()
-		if err != nil {
-			errs = packer.MultiErrorAppend(errs, err)
-		}
 	}
 
 	if p.config.User == "" {
@@ -166,33 +130,6 @@ func (p *Provisioner) Prepare(raws ...interface{}) error {
 	if errs != nil && len(errs.Errors) > 0 {
 		return errs
 	}
-	return nil
-}
-
-func (p *Provisioner) getVersion() error {
-	out, err := exec.Command(p.config.Command, "--version").Output()
-	if err != nil {
-		return fmt.Errorf(
-			"Error running \"%s --version\": %s", p.config.Command, err.Error())
-	}
-
-	versionRe := regexp.MustCompile(`\w (\d+\.\d+[.\d+]*)`)
-	matches := versionRe.FindStringSubmatch(string(out))
-	if matches == nil {
-		return fmt.Errorf(
-			"Could not find %s version in output:\n%s", p.config.Command, string(out))
-	}
-
-	version := matches[1]
-	log.Printf("%s version: %s", p.config.Command, version)
-	p.ansibleVersion = version
-
-	majVer, err := strconv.ParseUint(strings.Split(version, ".")[0], 10, 0)
-	if err != nil {
-		return fmt.Errorf("Could not parse major version from \"%s\".", version)
-	}
-	p.ansibleMajVersion = uint(majVer)
-
 	return nil
 }
 
@@ -302,44 +239,8 @@ func (p *Provisioner) Provision(ui packer.Ui, comm packer.Communicator) error {
         }()
     }
 
-	if len(p.config.InventoryFile) == 0 {
-		tf, err := ioutil.TempFile(p.config.InventoryDirectory, "packer-provisioner-ansible")
-		if err != nil {
-			return fmt.Errorf("Error preparing inventory file: %s", err)
-		}
-		defer os.Remove(tf.Name())
-
-		host := fmt.Sprintf("%s ansible_host=127.0.0.1 ansible_user=%s ansible_port=%s\n",
-			p.config.HostAlias, p.config.User, p.config.LocalPort)
-		if p.ansibleMajVersion < 2 {
-			host = fmt.Sprintf("%s ansible_ssh_host=127.0.0.1 ansible_ssh_user=%s ansible_ssh_port=%s\n",
-				p.config.HostAlias, p.config.User, p.config.LocalPort)
-		}
-
-		w := bufio.NewWriter(tf)
-		w.WriteString(host)
-		for _, group := range p.config.Groups {
-			fmt.Fprintf(w, "[%s]\n%s", group, host)
-		}
-
-		for _, group := range p.config.EmptyGroups {
-			fmt.Fprintf(w, "[%s]\n", group)
-		}
-
-		if err := w.Flush(); err != nil {
-			tf.Close()
-			return fmt.Errorf("Error preparing inventory file: %s", err)
-		}
-		tf.Close()
-		p.config.InventoryFile = tf.Name()
-		defer func() {
-			p.config.InventoryFile = ""
-		}()
-	}
-
-	//if err := p.executeAnsible(ui, comm, k.privKeyFile); err != nil {
 	if err := p.executeSshProxy(ui, comm); err != nil {
-		return fmt.Errorf("Error executing Ansible: %s", err)
+		return fmt.Errorf("Error executing %s: %s", p.config.Command, err)
 	}
 
 	return nil
@@ -357,13 +258,22 @@ func (p *Provisioner) Cancel() {
 
 func (p *Provisioner) executeSshProxy(ui packer.Ui, comm packer.Communicator) error {
 
-    args := []string {"--ssh-config", "${SSH_CONFIG_FILE}", fmt.Sprintf("--hosts=%s", p.config.HostAlias)}
+    shell_cmd := []string { p.config.Command }
+    shell_cmd = append(shell_cmd, p.config.Arguments...)
 
-    fmt.Println(args)
-	cmd := exec.Command("sh",  "-c", "echo $SSH_CONFIG_FILE ; exit 1; pytest")
+    args := []string {
+        "-e",
+        "-c",
+        strings.Join(shell_cmd, " ") }
+
+    cmd := exec.Command("sh", args...)
 
 	cmd.Env = os.Environ()
     cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", p.config.SshConfigEnvName, p.config.SshConfigFile))
+    cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", p.config.HostAliasEnvName, p.config.HostAlias))
+    if len(p.config.EnvVars) > 0 {
+        cmd.Env = append(cmd.Env, p.config.EnvVars...)
+    }
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -398,83 +308,7 @@ func (p *Provisioner) executeSshProxy(ui packer.Ui, comm packer.Communicator) er
 	go repeat(stdout)
 	go repeat(stderr)
 
-	ui.Say(fmt.Sprintf("Executing SshProxy: %s", strings.Join(cmd.Args, " ")))
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-	wg.Wait()
-	err = cmd.Wait()
-	if err != nil {
-		return fmt.Errorf("Non-zero exit status: %s", err)
-	}
-
-	return nil
-}
-
-func (p *Provisioner) executeAnsible(ui packer.Ui, comm packer.Communicator, privKeyFile string) error {
-	playbook, _ := filepath.Abs(p.config.PlaybookFile)
-	inventory := p.config.InventoryFile
-	if len(p.config.InventoryDirectory) > 0 {
-		inventory = p.config.InventoryDirectory
-	}
-	var envvars []string
-
-	args := []string{"--extra-vars", fmt.Sprintf("packer_build_name=%s packer_builder_type=%s",
-		p.config.PackerBuildName, p.config.PackerBuilderType),
-		"-i", inventory, playbook}
-	if len(privKeyFile) > 0 {
-		// Changed this from using --private-key to supplying -e ansible_ssh_private_key_file as the latter
-		// is treated as a highest priority variable, and thus prevents overriding by dynamic variables
-		// as seen in #5852
-		// args = append(args, "--private-key", privKeyFile)
-		args = append(args, "-e", fmt.Sprintf("ansible_ssh_private_key_file=%s", privKeyFile))
-	}
-	args = append(args, p.config.ExtraArguments...)
-	if len(p.config.AnsibleEnvVars) > 0 {
-		envvars = append(envvars, p.config.AnsibleEnvVars...)
-	}
-
-	cmd := exec.Command(p.config.Command, args...)
-
-	cmd.Env = os.Environ()
-	if len(envvars) > 0 {
-		cmd.Env = append(cmd.Env, envvars...)
-	}
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return err
-	}
-
-	wg := sync.WaitGroup{}
-	repeat := func(r io.ReadCloser) {
-		reader := bufio.NewReader(r)
-		for {
-			line, err := reader.ReadString('\n')
-			if line != "" {
-				line = strings.TrimRightFunc(line, unicode.IsSpace)
-				ui.Message(line)
-			}
-			if err != nil {
-				if err == io.EOF {
-					break
-				} else {
-					ui.Error(err.Error())
-					break
-				}
-			}
-		}
-		wg.Done()
-	}
-	wg.Add(2)
-	go repeat(stdout)
-	go repeat(stderr)
-
-	ui.Say(fmt.Sprintf("Executing Ansible: %s", strings.Join(cmd.Args, " ")))
+	ui.Say(fmt.Sprintf("Executing: %s %s", p.config.Command, strings.Join(p.config.Arguments, " ")))
 	if err := cmd.Start(); err != nil {
 		return err
 	}
@@ -502,15 +336,6 @@ func validateFileConfig(name string, config string, req bool) error {
 	return nil
 }
 
-func validateInventoryDirectoryConfig(name string) error {
-	info, err := os.Stat(name)
-	if err != nil {
-		return fmt.Errorf("inventory_directory: %s is invalid: %s", name, err)
-	} else if !info.IsDir() {
-		return fmt.Errorf("inventory_directory: %s must point to a directory", name)
-	}
-	return nil
-}
 
 type userKey struct {
 	ssh.PublicKey
