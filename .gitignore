@@ -1,0 +1,5 @@
+.packer
+packer-provisioner-sshproxy
+*.log
+*.out
+__pycache__

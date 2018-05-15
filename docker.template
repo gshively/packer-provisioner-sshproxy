@@ -1,0 +1,21 @@
+{
+    "builders": [
+        {
+            "type": "docker",
+            "image": "centos",
+            "commit": "true"
+        }
+    ],
+    "provisioners": [
+        {
+            "type": "ansible",
+            "playbook_file": "playbook.yml"
+        },
+        {
+            "type": "sshproxy",
+            "playbook_file": "playbook.yml",
+            "ssh_config_env_name": "SSH_CONFIG_FILE"
+        }
+    ]
+}
+

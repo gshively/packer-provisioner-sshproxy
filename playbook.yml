@@ -1,0 +1,7 @@
+---
+- hosts: all
+  tasks:
+    - name: a test file
+      file:
+        path: /tmp/a_test_file
+        state: touch
