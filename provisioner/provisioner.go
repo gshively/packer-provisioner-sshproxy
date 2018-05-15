@@ -35,6 +35,12 @@ type Config struct {
 	common.PackerConfig `mapstructure:",squash"`
 	ctx                 interpolate.Context
 
+    // Filename to use for the ssh environment, generated if not passed
+    SshConfigFile       string `mapstructure:"ssh_config_file"`
+
+    // Environment Variable name to set for the SshConfigFile
+    SshConfigEnvName    string `mapstructure:"ssh_config_env_name"`
+
 	// The command to run ansible
 	Command string
 
@@ -89,6 +95,10 @@ func (p *Provisioner) Prepare(raws ...interface{}) error {
 	if p.config.HostAlias == "" {
 		p.config.HostAlias = "default"
 	}
+
+    if p.config.SshConfigEnvName == "" {
+        p.config.SshConfigEnvName = "SSH_CONFIG_FILE"
+    }
 
 	var errs *packer.MultiError
 	err = validateFileConfig(p.config.PlaybookFile, "playbook_file", true)
@@ -266,6 +276,32 @@ func (p *Provisioner) Provision(ui packer.Ui, comm packer.Communicator) error {
 
 	go p.adapter.Serve()
 
+    if len(p.config.SshConfigFile) == 0 {
+        tf, err := ioutil.TempFile("", "ssh_config")
+        if err != nil {
+            return fmt.Errorf("Error preparing ssh_config file: %s", err)
+        }
+        defer os.Remove(tf.Name())
+        ssh_config := fmt.Sprintf(`Host %s
+            Hostname 127.0.0.1
+            Port %s
+            StrictHostKeyChecking no
+            User %s
+            IdentityFile %s
+        `, p.config.HostAlias, p.config.LocalPort, p.config.User, k.privKeyFile)
+        w := bufio.NewWriter(tf)
+        w.WriteString(ssh_config)
+        if err := w.Flush(); err != nil {
+            tf.Close()
+            return fmt.Errorf("Error preparing ssh_config file: %s", err)
+        }
+        tf.Close()
+        p.config.SshConfigFile = tf.Name()
+        defer func() {
+            p.config.SshConfigFile = ""
+        }()
+    }
+
 	if len(p.config.InventoryFile) == 0 {
 		tf, err := ioutil.TempFile(p.config.InventoryDirectory, "packer-provisioner-ansible")
 		if err != nil {
@@ -302,7 +338,7 @@ func (p *Provisioner) Provision(ui packer.Ui, comm packer.Communicator) error {
 	}
 
 	//if err := p.executeAnsible(ui, comm, k.privKeyFile); err != nil {
-	if err := p.executeSshProxy(ui, comm, k.privKeyFile); err != nil {
+	if err := p.executeSshProxy(ui, comm); err != nil {
 		return fmt.Errorf("Error executing Ansible: %s", err)
 	}
 
@@ -319,32 +355,15 @@ func (p *Provisioner) Cancel() {
 	os.Exit(0)
 }
 
-func (p *Provisioner) executeSshProxy(ui packer.Ui, comm packer.Communicator, privKeyFile string) error {
-    tf, err := ioutil.TempFile("", "ssh_config")
-    if err != nil {
-        return fmt.Errorf("Error preparing ssh_config file: %s", err)
-    }
-    defer os.Remove(tf.Name())
-    ssh_config := fmt.Sprintf(`Host %s
-        Hostname 127.0.0.1
-        Port %s
-        StrictHostKeyChecking no
-        User %s
-        IdentityFile %s
-    `, p.config.HostAlias, p.config.LocalPort, p.config.User, privKeyFile)
-    w := bufio.NewWriter(tf)
-    w.WriteString(ssh_config)
-    if err := w.Flush(); err != nil {
-        tf.Close()
-        return fmt.Errorf("Error preparing ssh_config file: %s", err)
-    }
-    tf.Close()
+func (p *Provisioner) executeSshProxy(ui packer.Ui, comm packer.Communicator) error {
 
-    args := []string {"--ssh-config", tf.Name(), fmt.Sprintf("--hosts=%s", p.config.HostAlias)}
+    args := []string {"--ssh-config", "${SSH_CONFIG_FILE}", fmt.Sprintf("--hosts=%s", p.config.HostAlias)}
 
-	cmd := exec.Command("pytest", args...)
+    fmt.Println(args)
+	cmd := exec.Command("sh",  "-c", "echo $SSH_CONFIG_FILE ; exit 1; pytest")
 
 	cmd.Env = os.Environ()
+    cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", p.config.SshConfigEnvName, p.config.SshConfigFile))
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
