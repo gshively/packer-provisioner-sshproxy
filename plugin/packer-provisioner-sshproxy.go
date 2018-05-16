@@ -1,7 +1,7 @@
 package main
 
 import (
-    "github.com/gshively/packer-provisioner-sshproxy/provisioner/sshproxy"
+    provisioner "github.com/gshively/packer-provisioner-sshproxy/provisioner/sshproxy"
     "github.com/hashicorp/packer/packer/plugin"
 )
 
@@ -11,6 +11,6 @@ func main() {
         panic(err)
     }
 
-    server.RegisterProvisioner(new(sshproxy.Provisioner))
+    server.RegisterProvisioner(new(provisioner.Provisioner))
     server.Serve()
 }

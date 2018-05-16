@@ -7,7 +7,11 @@ all: plugins
 
 plugins: $(GOBIN)/packer-provisioner-sshproxy
 
-test:
+$(GOBIN)/packer-provisioner-sshproxy: provisioner/sshproxy/adapter.go
+$(GOBIN)/packer-provisioner-sshproxy: provisioner/sshproxy/provisioner.go
+$(GOBIN)/packer-provisioner-sshproxy: provisioner/sshproxy/scp.go
+
+test: plugins
 	$(PACKER) build -only docker docker.template
 
 clean:
