@@ -10,6 +10,8 @@ plugins: $(GOBIN)/packer-provisioner-sshproxy
 test:
 	$(PACKER) build -only docker docker.template
 
+clean:
+	-rm $(GOBIN)/packer-provisioner-sshproxy
 
-$(GOBIN)/%: plugins/%.go
+$(GOBIN)/%: plugin/%.go
 	GOBIN=$(GOBIN) go install $<
