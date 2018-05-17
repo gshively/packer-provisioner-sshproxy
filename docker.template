@@ -34,6 +34,12 @@
             "environment_variables": [
                 "PYTEST_ADDOPTS=--color=yes -v"
             ]
+        },
+        {
+            "type":                "testinfra",
+            "environment_variables": [
+                "PYTEST_ADDOPTS=--color=yes -v"
+            ]
         }
     ],
     "post-processors": [

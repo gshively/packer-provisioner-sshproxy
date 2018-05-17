@@ -55,12 +55,17 @@ type Config struct {
 }
 
 type Provisioner struct {
+    ProviderName      string
 	config            Config
 	adapter           *adapter
 	done              chan struct{}
 }
 
 func (p *Provisioner) Prepare(raws ...interface{}) error {
+    if p.ProviderName == "" {
+        p.ProviderName = "sshproxy"
+    }
+
 	p.done = make(chan struct{})
 
 	err := config.Decode(&p.config, &config.DecodeOpts{
@@ -134,7 +139,7 @@ func (p *Provisioner) Prepare(raws ...interface{}) error {
 }
 
 func (p *Provisioner) Provision(ui packer.Ui, comm packer.Communicator) error {
-	ui.Say("Provisioning with SshProxy...")
+	ui.Say(fmt.Sprintf("Provisioning with %s...", strings.Title(p.ProviderName)))
 
 	k, err := newUserKey(p.config.SSHAuthorizedKeyFile)
 	if err != nil {
