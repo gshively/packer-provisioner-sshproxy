@@ -1,4 +1,4 @@
-package sshproxy
+package testinfra
 
 import (
 	"errors"
@@ -19,7 +19,7 @@ func processConfig(raws *([]interface{})) error {
 	var errs *packer.MultiError
 
 	for idx, _ := range *raws {
-		if raw_map, ok := (*raws)[idx].(map[interface{}]interface{}); ok {
+		if raw_map, ok := (*raws)[idx].(map[string]interface{}); ok {
 			if _, ok := raw_map["command"]; ok {
 				foundCommand = true
 			}

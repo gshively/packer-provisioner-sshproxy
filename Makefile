@@ -15,7 +15,8 @@ $(GOBIN)/packer-provisioner-sshproxy: provisioner/sshproxy/scp.go
 $(GOBIN)/packer-provisioner-testinfra: provisioner/testinfra/provisioner.go
 
 test: 
-	go test github.com/gshively/packer-provisioner-sshproxy/provisioner/sshproxy
+	@go test github.com/gshively/packer-provisioner-sshproxy/provisioner/sshproxy 	\
+			github.com/gshively/packer-provisioner-sshproxy/provisioner/testinfra
 
 fulltest: plugins
 	$(PACKER) build -only docker docker.template
