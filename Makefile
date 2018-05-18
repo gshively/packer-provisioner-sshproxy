@@ -1,7 +1,7 @@
 PACKER := ~/bin/packer
 GOBIN  ?= $(shell go env GOPATH)/bin
 
-.PHONY: all plugins test fmt clean
+.PHONY: all plugins test fulltest fmt clean
 
 all: plugins
 
@@ -14,7 +14,10 @@ $(GOBIN)/packer-provisioner-sshproxy: provisioner/sshproxy/scp.go
 
 $(GOBIN)/packer-provisioner-testinfra: provisioner/testinfra/provisioner.go
 
-test: plugins
+test: 
+	go test github.com/gshively/packer-provisioner-sshproxy/provisioner/sshproxy
+
+fulltest: plugins
 	$(PACKER) build -only docker docker.template
 
 fmt:
