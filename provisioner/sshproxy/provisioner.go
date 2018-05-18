@@ -33,38 +33,38 @@ type Config struct {
 	common.PackerConfig `mapstructure:",squash"`
 	ctx                 interpolate.Context
 
-    // Filename/EnvName to use for the ssh environment, generated if not passed
-    SshConfigFile       string `mapstructure:"ssh_config_file"`
-    SshConfigEnvName    string `mapstructure:"ssh_config_env_name"`
+	// Filename/EnvName to use for the ssh environment, generated if not passed
+	SshConfigFile    string `mapstructure:"ssh_config_file"`
+	SshConfigEnvName string `mapstructure:"ssh_config_env_name"`
 
-    // HostAlias/EnvName to use for the ssh target host, "default" if not specified
-	HostAlias            string   `mapstructure:"host_alias"`
-    HostAliasEnvName     string   `mapstructure:"host_alias_env_name"`
+	// HostAlias/EnvName to use for the ssh target host, "default" if not specified
+	HostAlias        string `mapstructure:"host_alias"`
+	HostAliasEnvName string `mapstructure:"host_alias_env_name"`
 
 	// The command to run ansible
-	Command string
+	Command   string
 	Arguments []string `mapstructure:"arguments"`
-    EnvVars        []string `mapstructure:"environment_variables"`
+	EnvVars   []string `mapstructure:"environment_variables"`
 
 	// The main playbook file to execute.
-	User                 string   `mapstructure:"user"`
-	LocalPort            string   `mapstructure:"local_port"`
-	SSHHostKeyFile       string   `mapstructure:"ssh_host_key_file"`
-	SSHAuthorizedKeyFile string   `mapstructure:"ssh_authorized_key_file"`
-	SFTPCmd              string   `mapstructure:"sftp_command"`
+	User                 string `mapstructure:"user"`
+	LocalPort            string `mapstructure:"local_port"`
+	SSHHostKeyFile       string `mapstructure:"ssh_host_key_file"`
+	SSHAuthorizedKeyFile string `mapstructure:"ssh_authorized_key_file"`
+	SFTPCmd              string `mapstructure:"sftp_command"`
 }
 
 type Provisioner struct {
-    ProviderName      string
-	config            Config
-	adapter           *adapter
-	done              chan struct{}
+	ProviderName string
+	config       Config
+	adapter      *adapter
+	done         chan struct{}
 }
 
 func (p *Provisioner) Prepare(raws ...interface{}) error {
-    if p.ProviderName == "" {
-        p.ProviderName = "sshproxy"
-    }
+	if p.ProviderName == "" {
+		p.ProviderName = "sshproxy"
+	}
 
 	p.done = make(chan struct{})
 
@@ -110,7 +110,7 @@ func (p *Provisioner) Prepare(raws ...interface{}) error {
 			log.Println(p.config.SSHHostKeyFile, "does not exist")
 			errs = packer.MultiErrorAppend(errs, err)
 		}
-    }
+	}
 
 	if len(p.config.LocalPort) > 0 {
 		if _, err := strconv.ParseUint(p.config.LocalPort, 10, 16); err != nil {
@@ -218,31 +218,31 @@ func (p *Provisioner) Provision(ui packer.Ui, comm packer.Communicator) error {
 
 	go p.adapter.Serve()
 
-    if len(p.config.SshConfigFile) == 0 {
-        tf, err := ioutil.TempFile("", "ssh_config")
-        if err != nil {
-            return fmt.Errorf("Error preparing ssh_config file: %s", err)
-        }
-        defer os.Remove(tf.Name())
-        ssh_config := fmt.Sprintf(`Host %s
+	if len(p.config.SshConfigFile) == 0 {
+		tf, err := ioutil.TempFile("", "ssh_config")
+		if err != nil {
+			return fmt.Errorf("Error preparing ssh_config file: %s", err)
+		}
+		defer os.Remove(tf.Name())
+		ssh_config := fmt.Sprintf(`Host %s
             Hostname 127.0.0.1
             Port %s
             StrictHostKeyChecking no
             User %s
             IdentityFile %s
         `, p.config.HostAlias, p.config.LocalPort, p.config.User, k.privKeyFile)
-        w := bufio.NewWriter(tf)
-        w.WriteString(ssh_config)
-        if err := w.Flush(); err != nil {
-            tf.Close()
-            return fmt.Errorf("Error preparing ssh_config file: %s", err)
-        }
-        tf.Close()
-        p.config.SshConfigFile = tf.Name()
-        defer func() {
-            p.config.SshConfigFile = ""
-        }()
-    }
+		w := bufio.NewWriter(tf)
+		w.WriteString(ssh_config)
+		if err := w.Flush(); err != nil {
+			tf.Close()
+			return fmt.Errorf("Error preparing ssh_config file: %s", err)
+		}
+		tf.Close()
+		p.config.SshConfigFile = tf.Name()
+		defer func() {
+			p.config.SshConfigFile = ""
+		}()
+	}
 
 	if err := p.executeSshProxy(ui, comm); err != nil {
 		return fmt.Errorf("Error executing %s: %s", p.config.Command, err)
@@ -263,22 +263,22 @@ func (p *Provisioner) Cancel() {
 
 func (p *Provisioner) executeSshProxy(ui packer.Ui, comm packer.Communicator) error {
 
-    shell_cmd := []string { p.config.Command }
-    shell_cmd = append(shell_cmd, p.config.Arguments...)
+	shell_cmd := []string{p.config.Command}
+	shell_cmd = append(shell_cmd, p.config.Arguments...)
 
-    args := []string {
-        "-e",
-        "-c",
-        strings.Join(shell_cmd, " ") }
+	args := []string{
+		"-e",
+		"-c",
+		strings.Join(shell_cmd, " ")}
 
-    cmd := exec.Command("sh", args...)
+	cmd := exec.Command("sh", args...)
 
 	cmd.Env = os.Environ()
-    cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", p.config.SshConfigEnvName, p.config.SshConfigFile))
-    cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", p.config.HostAliasEnvName, p.config.HostAlias))
-    if len(p.config.EnvVars) > 0 {
-        cmd.Env = append(cmd.Env, p.config.EnvVars...)
-    }
+	cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", p.config.SshConfigEnvName, p.config.SshConfigFile))
+	cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", p.config.HostAliasEnvName, p.config.HostAlias))
+	if len(p.config.EnvVars) > 0 {
+		cmd.Env = append(cmd.Env, p.config.EnvVars...)
+	}
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -340,7 +340,6 @@ func validateFileConfig(name string, config string, req bool) error {
 	}
 	return nil
 }
-
 
 type userKey struct {
 	ssh.PublicKey
