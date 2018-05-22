@@ -8,8 +8,8 @@
         name: squid
         state: present
     - name: Squid Configuration
-      file:
-        path: /etc/squid/squid.conf
+      template:
+        dest: /etc/squid/squid.conf
         src: files/squid.conf
     - name: Ensure Squid will start on boot
       service: 
