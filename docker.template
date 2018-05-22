@@ -1,24 +1,42 @@
 {
+    "variables": {
+        "source_ami": null,
+        "ami_name":   null,
+        "subnet_id":  null,
+        "region":     null
+    },
     "builders": [
         {
-            "type": "docker",
-            "image": "centos",
-            "commit": "true"
+            "type":    "docker",
+            "image":   "amazonlinux",
+            "commit":  "false",
+            "discard": "true"
         },
         {
-            "type": "amazon-ebs",
-            "source_ami": "ami-d28c1aad",
-            "ami_name": "s5ugys-test",
+            "name":    "docker-commit",
+            "type":    "docker",
+            "image":   "amazonlinux",
+            "commit":  "true",
+            "discard": "false"
+        },
+        {
+            "type":          "amazon-ebs",
+            "source_ami":    "{{ user `source_ami` }}",
+            "ami_name":      "{{ user `ami_name` }}",
             "instance_type": "t2.micro",
-            "ssh_username": "ec2-user",
-            "subnet_id": "subnet-da4dbee6",
-            "region": "us-east-1"
+            "ssh_username":  "ec2-user",
+            "subnet_id":     "{{ user `subnet_id` }}",
+            "region":        "{{ user `region` }}"
         }
     ],
     "provisioners": [
         {
             "type": "ansible",
             "playbook_file": "playbook.yml"
+        },
+        {
+            "type": "ansible",
+            "playbook_file": "squid.yml"
         },
         {
             "type": "sshproxy",
@@ -48,7 +66,7 @@
                 "type": "docker-tag",
                 "repository": "test",
                 "tag": "latest",
-                "only": [ "docker" ]
+                "only": [ "docker-commit" ]
             }
         ]
     ]

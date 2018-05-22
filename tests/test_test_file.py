@@ -7,6 +7,3 @@ def test_testfile(host):
 def test_test2(host):
     sut = host.file('/tmp/a_second_file')
     assert sut.exists
-
-def test_fail(host):
-    assert True

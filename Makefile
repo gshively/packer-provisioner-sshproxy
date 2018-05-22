@@ -19,7 +19,7 @@ test:
 			github.com/gshively/packer-provisioner-sshproxy/provisioner/testinfra
 
 fulltest: plugins
-	$(PACKER) build -only docker docker.template
+	$(PACKER) build -var-file variables.json -only docker docker.template
 
 fmt:
 	gofmt -w provisioner

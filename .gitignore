@@ -5,3 +5,4 @@ packer-provisioner-sshproxy
 __pycache__
 dist
 .pytest_cache
+variables.json

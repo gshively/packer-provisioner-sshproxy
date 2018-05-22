@@ -1,0 +1,23 @@
+---
+- hosts: all
+  become: "{{ 'no' if packer_builder_type == 'docker' else 'yes' }}"
+
+  tasks:
+    - name: Install Squid
+      package:
+        name: squid
+        state: present
+    - name: Squid Configuration
+      file:
+        path: /etc/squid/squid.conf
+        src: files/squid.conf
+    - name: Ensure Squid will start on boot
+      service: 
+        name: squid
+        enabled: yes
+    - name: Ensure SSH enabled
+      package:
+        name: openssh
+        state: present
+      when: packer_builder_type != 'docker'
+
