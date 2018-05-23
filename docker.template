@@ -1,32 +1,48 @@
 {
     "variables": {
-        "source_ami": null,
-        "ami_name":   null,
-        "subnet_id":  null,
-        "region":     null
+        "docker_image":    "amazonlinux",
+        "encrypt_boot":    "false",
+        "filter":          null,
+        "ami_name":        null,
+        "subnet_id":       null,
+        "region":          null
     },
     "builders": [
         {
-            "type":    "docker",
-            "image":   "amazonlinux",
-            "commit":  "false",
-            "discard": "true"
+            "type":           "docker",
+            "image":          "{{ user `docker_image` }}",
+            "commit":         "false",
+            "discard":        "true"
         },
         {
-            "name":    "docker-commit",
-            "type":    "docker",
-            "image":   "amazonlinux",
-            "commit":  "true",
-            "discard": "false"
+            "name":           "docker-commit",
+            "type":           "docker",
+            "image":          "{{ user `docker_image` }}",
+            "commit":         "true",
+            "discard":        "false"
         },
         {
             "type":          "amazon-ebs",
-            "source_ami":    "{{ user `source_ami` }}",
+            "source_ami_filter": {
+                "filters": {
+                    "architecture":        "x86_64",
+                    "image-type":          "machine",
+                    "root-device-type":    "ebs",
+                    "virtualization-type": "hvm",
+                    "name":                "{{ user `filter` }}"
+                },
+                "owners": [ "amazon" ],
+                "most_recent": true
+            },
             "ami_name":      "{{ user `ami_name` }}",
             "instance_type": "t2.micro",
             "ssh_username":  "ec2-user",
             "subnet_id":     "{{ user `subnet_id` }}",
-            "region":        "{{ user `region` }}"
+            "region":        "{{ user `region` }}",
+            "force_deregister": "true",
+            "force_delete_snapshot": "true",
+            "encrypt_boot": "{{ user `encrypt_boot` }}",
+            "shutdown_behavior": "terminate"
         }
     ],
     "provisioners": [
@@ -50,13 +66,13 @@
             "host_alias":          "target",
             "ssh_config_env_name": "SSH_CONFIG",
             "environment_variables": [
-                "PYTEST_ADDOPTS=--color=yes -v"
+                "PYTEST_ADDOPTS=--color=yes -v --sudo"
             ]
         },
         {
             "type":                "testinfra",
             "environment_variables": [
-                "PYTEST_ADDOPTS=--color=yes -v"
+                "PYTEST_ADDOPTS=--color=yes -v --sudo"
             ]
         }
     ],

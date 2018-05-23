@@ -3,16 +3,23 @@
   become: "{{ 'no' if packer_builder_type == 'docker' else 'yes' }}"
 
   tasks:
-    - name: Install Squid
+    - name: Install Squid and Packages
       package:
-        name: squid
+        name: "{{ item }}"
         state: present
+      with_items:
+        - squid
+        - sudo
     - name: Squid Configuration
       template:
         dest: /etc/squid/squid.conf
         src: files/squid.conf
+    - name: Squid Iptables
+      template:
+        dest: /etc/sysconfig/iptables
+        src:  files/iptables
     - name: Ensure Squid will start on boot
-      service: 
+      service:
         name: squid
         enabled: yes
     - name: Ensure SSH enabled
