@@ -224,12 +224,16 @@ func (p *Provisioner) Provision(ui packer.Ui, comm packer.Communicator) error {
 			return fmt.Errorf("Error preparing ssh_config file: %s", err)
 		}
 		defer os.Remove(tf.Name())
+		os.Setenv("PACKER_BUILD_NAME",   fmt.Sprintf("%s", p.config.PackerBuildName))
+		os.Setenv("PACKER_BUILDER_TYPE", fmt.Sprintf("%s", p.config.PackerBuilderType))
 		ssh_config := fmt.Sprintf(`Host %s
             Hostname 127.0.0.1
             Port %s
             StrictHostKeyChecking no
             User %s
             IdentityFile %s
+            SendEnv PACKER_BUILD_NAME
+            SendEnv PACKER_BUILDER_TYPE
         `, p.config.HostAlias, p.config.LocalPort, p.config.User, k.privKeyFile)
 		w := bufio.NewWriter(tf)
 		w.WriteString(ssh_config)

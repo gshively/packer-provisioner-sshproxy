@@ -2,61 +2,22 @@
     "variables": {
         "docker_image":    "amazonlinux",
         "encrypt_boot":    "false",
-        "filter":          null,
-        "ami_name":        null,
-        "subnet_id":       null,
+        "filter":          "",
+        "ami_name":        "",
+        "subnet_id":       "",
         "region":          null
     },
     "builders": [
         {
             "type":           "docker",
             "image":          "{{ user `docker_image` }}",
-            "commit":         "false",
-            "discard":        "true"
-        },
-        {
-            "name":           "docker-commit",
-            "type":           "docker",
-            "image":          "{{ user `docker_image` }}",
-            "commit":         "true",
-            "discard":        "false"
-        },
-        {
-            "type":          "amazon-ebs",
-            "source_ami_filter": {
-                "filters": {
-                    "architecture":        "x86_64",
-                    "image-type":          "machine",
-                    "root-device-type":    "ebs",
-                    "virtualization-type": "hvm",
-                    "name":                "{{ user `filter` }}"
-                },
-                "owners": [ "amazon" ],
-                "most_recent": true
-            },
-            "ami_name":      "{{ user `ami_name` }}",
-            "instance_type": "t2.micro",
-            "ssh_username":  "ec2-user",
-            "subnet_id":     "{{ user `subnet_id` }}",
-            "region":        "{{ user `region` }}",
-            "force_deregister": "true",
-            "force_delete_snapshot": "true",
-            "encrypt_boot": "{{ user `encrypt_boot` }}",
-            "shutdown_behavior": "terminate"
+            "commit":         "true"
         }
     ],
     "provisioners": [
         {
             "type": "ansible",
             "playbook_file": "playbook.yml"
-        },
-        {
-            "type": "ansible",
-            "playbook_file": "squid.yml"
-        },
-        {
-            "type": "sshproxy",
-            "command": "ssh -F ${SSH_CONFIG_FILE} ${TARGET_HOSTS} touch /tmp/a_second_file"
         },
         {
             "type":                "sshproxy",
@@ -66,13 +27,13 @@
             "host_alias":          "target",
             "ssh_config_env_name": "SSH_CONFIG",
             "environment_variables": [
-                "PYTEST_ADDOPTS=--color=yes -v --sudo"
+                "PYTEST_ADDOPTS=--color=yes -v"
             ]
         },
         {
             "type":                "testinfra",
             "environment_variables": [
-                "PYTEST_ADDOPTS=--color=yes -v --sudo"
+                "PYTEST_ADDOPTS=--color=yes -v"
             ]
         }
     ],
@@ -81,8 +42,7 @@
             {
                 "type": "docker-tag",
                 "repository": "test",
-                "tag": "latest",
-                "only": [ "docker-commit" ]
+                "tag": "latest"
             }
         ]
     ]

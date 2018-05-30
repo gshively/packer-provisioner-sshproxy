@@ -13,6 +13,9 @@ $(GOBIN)/packer-provisioner-sshproxy: provisioner/sshproxy/provisioner.go
 $(GOBIN)/packer-provisioner-sshproxy: provisioner/sshproxy/scp.go
 
 $(GOBIN)/packer-provisioner-testinfra: provisioner/testinfra/provisioner.go
+$(GOBIN)/packer-provisioner-testinfra: provisioner/sshproxy/adapter.go
+$(GOBIN)/packer-provisioner-testinfra: provisioner/sshproxy/provisioner.go
+$(GOBIN)/packer-provisioner-testinfra: provisioner/sshproxy/scp.go
 
 test: 
 	@go test github.com/gshively/packer-provisioner-sshproxy/provisioner/sshproxy 	\
